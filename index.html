@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trina Vertex S+ NEG18R.28 — V-I / P-V Curve Simulator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a; --surface: #1e293b; --border: #334155;
+      --text: #e2e8f0; --text-muted: #94a3b8; --accent: #38bdf8;
+      --accent2: #f97316; --accent3: #a78bfa; --green: #22c55e; --red: #ef4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+      border-bottom: 1px solid var(--border); padding: 20px 32px;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+    header p { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+    .container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    .grid { display: grid; grid-template-columns: 320px 1fr; gap: 24px; }
+    @media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } }
+
+    /* Control Panel */
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+    }
+    .panel h2 { font-size: 1rem; font-weight: 600; color: var(--accent); margin-bottom: 16px; }
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block; font-size: 0.8rem; font-weight: 500;
+      color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .field select, .field input[type="number"] {
+      width: 100%; padding: 10px 12px; background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem;
+      outline: none; transition: border-color 0.2s;
+    }
+    .field select:focus, .field input:focus { border-color: var(--accent); }
+    .field .range-row { display: flex; align-items: center; gap: 12px; }
+    .field input[type="range"] {
+      flex: 1; accent-color: var(--accent); height: 6px; cursor: pointer;
+    }
+    .field .range-value {
+      min-width: 60px; text-align: right; font-size: 0.9rem;
+      font-weight: 600; color: var(--accent);
+    }
+    .field .unit { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* Specs Table */
+    .specs-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .specs-table th, .specs-table td {
+      padding: 8px 10px; font-size: 0.8rem; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .specs-table th { color: var(--text-muted); font-weight: 500; }
+    .specs-table td { color: var(--text); font-weight: 600; }
+    .specs-table tr:last-child th, .specs-table tr:last-child td { border-bottom: none; }
+    .stc-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;
+      font-weight: 600; text-transform: uppercase;
+    }
+    .stc-badge.stc { background: rgba(56,189,248,0.15); color: var(--accent); }
+    .stc-badge.adjusted { background: rgba(249,115,22,0.15); color: var(--accent2); }
+
+    /* Charts Area */
+    .charts { display: flex; flex-direction: column; gap: 24px; }
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px;
+    }
+    .chart-card h3 {
+      font-size: 0.9rem; font-weight: 600; color: var(--text-muted);
+      margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .chart-wrap { position: relative; width: 100%; height: 360px; }
+    .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
+    /* User V lookup */
+    .lookup-section {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; margin-top: 16px;
+    }
+    .lookup-section h2 { font-size: 1rem; font-weight: 600; color: var(--accent3); margin-bottom: 12px; }
+    .lookup-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .lookup-row .field { flex: 1; min-width: 120px; margin-bottom: 0; }
+    .btn {
+      padding: 10px 20px; background: var(--accent); color: var(--bg);
+      border: none; border-radius: 8px; font-weight: 600; font-size: 0.85rem;
+      cursor: pointer; transition: opacity 0.2s; white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn.purple { background: var(--accent3); }
+    .lookup-result {
+      margin-top: 12px; padding: 12px 16px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem;
+      line-height: 1.6; display: none;
+    }
+    .lookup-result.show { display: block; }
+    .highlight { color: var(--accent); font-weight: 700; }
+    .highlight-orange { color: var(--accent2); font-weight: 700; }
+    .highlight-purple { color: var(--accent3); font-weight: 700; }
+
+    /* Footer */
+    footer {
+      text-align: center; padding: 20px; font-size: 0.75rem;
+      color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 32px;
+    }
+
+    /* MPP marker legend */
+    .legend-bar {
+      display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-muted); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Trina Vertex S+ NEG18R.28 — V-I / P-V Curve Simulator</h1>
+    <p>Interactive voltage-current and power-voltage curves based on single-diode model &bull; Datasheet-accurate parameters</p>
+  </header>
+
+  <div class="container">
+    <div class="grid">
+      <!-- LEFT: Controls -->
+      <div>
+        <div class="panel">
+          <h2>Module Configuration</h2>
+
+          <div class="field">
+            <label>Module Variant</label>
+            <select id="variant">
+              <option value="485">TSM-NEG18R.28 485W</option>
+              <option value="490">TSM-NEG18R.28 490W</option>
+              <option value="495">TSM-NEG18R.28 495W</option>
+              <option value="500" selected>TSM-NEG18R.28 500W</option>
+              <option value="505">TSM-NEG18R.28 505W</option>
+              <option value="510">TSM-NEG18R.28 510W</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Irradiance (W/m&sup2;)</label>
+            <div class="range-row">
+              <input type="range" id="irradiance" min="100" max="1200" step="50" value="1000" />
+              <span class="range-value" id="irradiance-val">1000</span>
+              <span class="unit">W/m&sup2;</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Cell Temperature (&deg;C)</label>
+            <div class="range-row">
+              <input type="range" id="temperature" min="-10" max="85" step="1" value="25" />
+              <span class="range-value" id="temperature-val">25</span>
+              <span class="unit">&deg;C</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Specs Table -->
+        <div class="panel" style="margin-top: 16px;">
+          <h2>Electrical Specifications</h2>
+          <table class="specs-table">
+            <tr><th>Parameter</th><th>STC</th><th>Adjusted</th></tr>
+            <tr>
+              <th>P<sub>max</sub> (W)</th>
+              <td id="spec-pmax-stc">—</td>
+              <td id="spec-pmax-adj">—</td>
+            </tr>
+            <tr>
+              <th>V<sub>oc</sub> (V)</th>
+              <td id="spec-voc-stc">—</td>
+              <td id="spec-voc-adj">—</td>
+            </tr>
+            <tr>
+              <th>I<sub>sc</sub> (A)</th>
+              <td id="spec-isc-stc">—</td>
+              <td id="spec-isc-adj">—</td>
+            </tr>
+            <tr>
+              <th>V<sub>mpp</sub> (V)</th>
+              <td id="spec-vmpp-stc">—</td>
+              <td id="spec-vmpp-adj">—</td>
+            </tr>
+            <tr>
+              <th>I<sub>mpp</sub> (A)</th>
+              <td id="spec-impp-stc">—</td>
+              <td id="spec-impp-adj">—</td>
+            </tr>
+            <tr>
+              <th>Efficiency (%)</th>
+              <td id="spec-eff-stc">—</td>
+              <td id="spec-eff-adj">—</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Temp Coefficients -->
+        <div class="panel" style="margin-top: 16px;">
+          <h2>Temperature Coefficients</h2>
+          <table class="specs-table">
+            <tr><th>P<sub>max</sub></th><td>-0.29 %/&deg;C</td></tr>
+            <tr><th>V<sub>oc</sub></th><td>-0.24 %/&deg;C</td></tr>
+            <tr><th>I<sub>sc</sub></th><td>+0.04 %/&deg;C</td></tr>
+            <tr><th>NOCT</th><td>43 &deg;C (&plusmn;2&deg;C)</td></tr>
+            <tr><th>Cells</th><td>108 (n-type i-TOPCon)</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- RIGHT: Charts -->
+      <div class="charts">
+        <div class="chart-card">
+          <h3>V-I Curve (Voltage vs Current)</h3>
+          <div class="legend-bar">
+            <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div> I-V Curve</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> MPP</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> V<sub>oc</sub></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div> I<sub>sc</sub></div>
+          </div>
+          <div class="chart-wrap"><canvas id="viChart"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>P-V Curve (Power vs Voltage)</h3>
+          <div class="legend-bar">
+            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> P-V Curve</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> P<sub>max</sub> (MPP)</div>
+          </div>
+          <div class="chart-wrap"><canvas id="pvChart"></canvas></div>
+        </div>
+
+        <!-- Irradiance vs Voltage at Fixed Current -->
+        <div class="chart-card">
+          <h3>Irradiance vs Voltage @ Fixed Current</h3>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
+            <div class="field" style="margin-bottom:0;flex:1;min-width:200px;">
+              <label>Fixed Current (A)</label>
+              <div class="range-row">
+                <input type="range" id="fixed-current" min="0.5" max="16" step="0.01" value="15.03" />
+                <span class="range-value" id="fixed-current-val">15.03</span>
+                <span class="unit">A</span>
+              </div>
+            </div>
+          </div>
+          <div class="legend-bar">
+            <div class="legend-item"><div class="legend-dot" style="background:#22d3ee"></div> Voltage at fixed I</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div> Power (V &times; I)</div>
+          </div>
+          <div class="chart-wrap"><canvas id="irrVChart"></canvas></div>
+        </div>
+
+        <!-- User Lookup -->
+        <div class="lookup-section">
+          <h2>Point Lookup — Get V & I at Custom Values</h2>
+          <div class="lookup-row">
+            <div class="field">
+              <label>Lookup Type</label>
+              <select id="lookup-type">
+                <option value="voltage">Given Voltage (V) &rarr; find I & P</option>
+                <option value="current">Given Current (A) &rarr; find V & P</option>
+                <option value="power">Given Power (W) &rarr; find V & I</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Value</label>
+              <input type="number" id="lookup-value" step="0.01" placeholder="e.g. 33.3" />
+            </div>
+            <button class="btn purple" onclick="doLookup()">Calculate</button>
+          </div>
+          <div class="lookup-result" id="lookup-result"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Trina Solar Vertex S+ NEG18R.28 Datasheet Simulator &bull; Single-diode model approximation &bull;
+    Data source: Trina Solar official datasheet (2024)
+  </footer>
+
+  <script>
+    // =====================================================================
+    // DATASHEET PARAMETERS — Trina Vertex S+ NEG18R.28 (STC)
+    // =====================================================================
+    const MODULE_DATA = {
+      485: { pmax: 485, voc: 39.4, isc: 15.76, vmpp: 32.7, impp: 14.84, eff: 21.8 },
+      490: { pmax: 490, voc: 39.6, isc: 15.80, vmpp: 32.9, impp: 14.91, eff: 22.0 },
+      495: { pmax: 495, voc: 39.8, isc: 15.83, vmpp: 33.1, impp: 14.97, eff: 22.3 },
+      500: { pmax: 500, voc: 40.1, isc: 15.86, vmpp: 33.3, impp: 15.03, eff: 22.5 },
+      505: { pmax: 505, voc: 40.3, isc: 15.89, vmpp: 33.5, impp: 15.09, eff: 22.7 },
+      510: { pmax: 510, voc: 40.6, isc: 15.93, vmpp: 33.7, impp: 15.14, eff: 22.9 },
+    };
+
+    // Temperature coefficients
+    const TEMP_COEFF = { pmax: -0.0029, voc: -0.0024, isc: 0.0004 };
+    const STC_TEMP = 25;    // °C
+    const STC_IRR = 1000;   // W/m²
+    const N_CELLS = 108;
+    const MODULE_AREA = 2.222; // m² (approximate for this module)
+
+    // =====================================================================
+    // SINGLE-DIODE MODEL — V-I Curve Generation
+    // =====================================================================
+
+    // Compute adjusted parameters for given irradiance & temperature
+    function adjustParams(stc, irradiance, cellTemp) {
+      const dT = cellTemp - STC_TEMP;
+      const G_ratio = irradiance / STC_IRR;
+
+      const isc_adj = stc.isc * G_ratio * (1 + TEMP_COEFF.isc * dT);
+      const voc_adj = stc.voc * (1 + TEMP_COEFF.voc * dT) + (N_CELLS * 0.02585) * Math.log(Math.max(G_ratio, 0.01));
+      const pmax_adj = stc.pmax * G_ratio * (1 + TEMP_COEFF.pmax * dT);
+
+      // Scale Vmpp and Impp proportionally
+      const vmpp_adj = stc.vmpp * (voc_adj / stc.voc);
+      const impp_adj = pmax_adj / vmpp_adj;
+
+      const eff_adj = (pmax_adj / (irradiance * MODULE_AREA)) * 100;
+
+      return {
+        pmax: Math.max(pmax_adj, 0),
+        voc: Math.max(voc_adj, 0),
+        isc: Math.max(isc_adj, 0),
+        vmpp: Math.max(vmpp_adj, 0),
+        impp: Math.max(impp_adj, 0),
+        eff: Math.max(eff_adj, 0),
+      };
+    }
+
+    // Generate V-I curve points using the single-diode equation approximation
+    // I = Isc - Isc * (e^((V - Voc) / (a * Vt * Ns)) - e^(-Voc / (a * Vt * Ns)))
+    // Simplified: I = Isc * (1 - C1 * (e^(V / (C2 * Voc)) - 1))
+    function generateIVCurve(params, numPoints = 500) {
+      const { voc, isc, vmpp, impp } = params;
+
+      // Derive curve shape constants from MPP
+      // At MPP: Impp = Isc * (1 - C1 * (e^(Vmpp/(C2*Voc)) - 1))
+      // At Voc: 0 = Isc * (1 - C1 * (e^(1/C2) - 1))  =>  C1 = 1 / (e^(1/C2) - 1)
+      // Solve for C2 iteratively
+      let C2 = 0.06; // initial guess
+      for (let iter = 0; iter < 100; iter++) {
+        const C1 = 1 / (Math.exp(1 / C2) - 1);
+        const i_calc = isc * (1 - C1 * (Math.exp(vmpp / (C2 * voc)) - 1));
+        const err = i_calc - impp;
+        // Newton-like step
+        const dC2 = 0.0001;
+        const C1p = 1 / (Math.exp(1 / (C2 + dC2)) - 1);
+        const i_calc_p = isc * (1 - C1p * (Math.exp(vmpp / ((C2 + dC2) * voc)) - 1));
+        const deriv = (i_calc_p - i_calc) / dC2;
+        if (Math.abs(deriv) < 1e-12) break;
+        C2 -= err / deriv;
+        C2 = Math.max(C2, 0.001);
+        if (Math.abs(err) < 1e-6) break;
+      }
+
+      const C1 = 1 / (Math.exp(1 / C2) - 1);
+
+      const voltages = [];
+      const currents = [];
+      const powers = [];
+
+      for (let i = 0; i <= numPoints; i++) {
+        const v = (voc * 1.02) * (i / numPoints); // go slightly beyond Voc
+        let current = isc * (1 - C1 * (Math.exp(v / (C2 * voc)) - 1));
+        current = Math.max(current, 0);
+
+        voltages.push(parseFloat(v.toFixed(4)));
+        currents.push(parseFloat(current.toFixed(4)));
+        powers.push(parseFloat((v * current).toFixed(4)));
+      }
+
+      return { voltages, currents, powers };
+    }
+
+    // =====================================================================
+    // CHART SETUP
+    // =====================================================================
+    let viChart, pvChart, irrVChart;
+
+    function createCharts() {
+      const viCtx = document.getElementById('viChart').getContext('2d');
+      const pvCtx = document.getElementById('pvChart').getContext('2d');
+
+      const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1e293b',
+            borderColor: '#334155',
+            borderWidth: 1,
+            titleColor: '#e2e8f0',
+            bodyColor: '#94a3b8',
+            padding: 10,
+            displayColors: false,
+          },
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            title: { display: true, color: '#94a3b8', font: { size: 12 } },
+            grid: { color: 'rgba(51,65,85,0.5)' },
+            ticks: { color: '#94a3b8' },
+          },
+          y: {
+            type: 'linear',
+            title: { display: true, color: '#94a3b8', font: { size: 12 } },
+            grid: { color: 'rgba(51,65,85,0.5)' },
+            ticks: { color: '#94a3b8' },
+            beginAtZero: true,
+          },
+        },
+      };
+
+      viChart = new Chart(viCtx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'I-V Curve',
+              data: [],
+              showLine: true,
+              pointRadius: 0,
+              borderColor: '#38bdf8',
+              borderWidth: 2.5,
+              fill: {
+                target: 'origin',
+                above: 'rgba(56,189,248,0.08)',
+              },
+              tension: 0.1,
+            },
+            {
+              label: 'MPP',
+              data: [],
+              pointRadius: 8,
+              pointBackgroundColor: '#22c55e',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+              showLine: false,
+            },
+            {
+              label: 'Voc',
+              data: [],
+              pointRadius: 7,
+              pointBackgroundColor: '#ef4444',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+              pointStyle: 'triangle',
+              showLine: false,
+            },
+            {
+              label: 'Isc',
+              data: [],
+              pointRadius: 7,
+              pointBackgroundColor: '#f97316',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+              pointStyle: 'rectRot',
+              showLine: false,
+            },
+            {
+              label: 'User Point',
+              data: [],
+              pointRadius: 9,
+              pointBackgroundColor: '#a78bfa',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+              pointStyle: 'star',
+              showLine: false,
+            },
+          ],
+        },
+        options: {
+          ...commonOptions,
+          scales: {
+            ...commonOptions.scales,
+            x: { ...commonOptions.scales.x, title: { ...commonOptions.scales.x.title, text: 'Voltage (V)' } },
+            y: { ...commonOptions.scales.y, title: { ...commonOptions.scales.y.title, text: 'Current (A)' } },
+          },
+          plugins: {
+            ...commonOptions.plugins,
+            tooltip: {
+              ...commonOptions.plugins.tooltip,
+              callbacks: {
+                label: (ctx) => {
+                  const ds = ctx.dataset.label;
+                  const v = ctx.parsed.x.toFixed(2);
+                  const i = ctx.parsed.y.toFixed(2);
+                  const p = (ctx.parsed.x * ctx.parsed.y).toFixed(1);
+                  return `${ds}: V=${v}V, I=${i}A, P=${p}W`;
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const irrVCtx = document.getElementById('irrVChart').getContext('2d');
+
+      pvChart = new Chart(pvCtx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'P-V Curve',
+              data: [],
+              showLine: true,
+              pointRadius: 0,
+              borderColor: '#a78bfa',
+              borderWidth: 2.5,
+              fill: {
+                target: 'origin',
+                above: 'rgba(167,139,250,0.08)',
+              },
+              tension: 0.1,
+            },
+            {
+              label: 'Pmax (MPP)',
+              data: [],
+              pointRadius: 8,
+              pointBackgroundColor: '#22c55e',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+              showLine: false,
+            },
+            {
+              label: 'User Point',
+              data: [],
+              pointRadius: 9,
+              pointBackgroundColor: '#f97316',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2,
+              pointStyle: 'star',
+              showLine: false,
+            },
+          ],
+        },
+        options: {
+          ...commonOptions,
+          scales: {
+            ...commonOptions.scales,
+            x: { ...commonOptions.scales.x, title: { ...commonOptions.scales.x.title, text: 'Voltage (V)' } },
+            y: { ...commonOptions.scales.y, title: { ...commonOptions.scales.y.title, text: 'Power (W)' } },
+          },
+          plugins: {
+            ...commonOptions.plugins,
+            tooltip: {
+              ...commonOptions.plugins.tooltip,
+              callbacks: {
+                label: (ctx) => {
+                  const ds = ctx.dataset.label;
+                  return `${ds}: V=${ctx.parsed.x.toFixed(2)}V, P=${ctx.parsed.y.toFixed(1)}W`;
+                },
+              },
+            },
+          },
+        },
+      });
+      irrVChart = new Chart(irrVCtx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'Voltage',
+              data: [],
+              showLine: true,
+              pointRadius: 0,
+              borderColor: '#22d3ee',
+              borderWidth: 2.5,
+              fill: false,
+              tension: 0.3,
+              yAxisID: 'y',
+            },
+            {
+              label: 'Power',
+              data: [],
+              showLine: true,
+              pointRadius: 0,
+              borderColor: '#f97316',
+              borderWidth: 2.5,
+              borderDash: [6, 3],
+              fill: false,
+              tension: 0.3,
+              yAxisID: 'y1',
+            },
+          ],
+        },
+        options: {
+          ...commonOptions,
+          scales: {
+            x: {
+              ...commonOptions.scales.x,
+              title: { ...commonOptions.scales.x.title, text: 'Irradiance (W/m\u00B2)' },
+              min: 100, max: 1200,
+            },
+            y: {
+              ...commonOptions.scales.y,
+              position: 'left',
+              title: { ...commonOptions.scales.y.title, text: 'Voltage (V)' },
+              beginAtZero: false,
+            },
+            y1: {
+              type: 'linear',
+              position: 'right',
+              title: { display: true, text: 'Power (W)', color: '#f97316', font: { size: 12 } },
+              grid: { drawOnChartArea: false },
+              ticks: { color: '#f97316' },
+              beginAtZero: true,
+            },
+          },
+          plugins: {
+            ...commonOptions.plugins,
+            tooltip: {
+              ...commonOptions.plugins.tooltip,
+              callbacks: {
+                label: (ctx) => {
+                  const ds = ctx.dataset.label;
+                  if (ds === 'Voltage') return `G=${ctx.parsed.x} W/m\u00B2, V=${ctx.parsed.y.toFixed(2)} V`;
+                  return `G=${ctx.parsed.x} W/m\u00B2, P=${ctx.parsed.y.toFixed(1)} W`;
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    // =====================================================================
+    // IRRADIANCE vs VOLTAGE @ FIXED CURRENT
+    // =====================================================================
+    function generateIrrVData(fixedCurrent, variant, cellTemp) {
+      const stc = MODULE_DATA[variant];
+      const irradiancePoints = [];
+      const voltagePoints = [];
+      const powerPoints = [];
+
+      for (let g = 100; g <= 1200; g += 25) {
+        const adj = adjustParams(stc, g, cellTemp);
+        const curve = generateIVCurve(adj, 500);
+
+        // If fixedCurrent > Isc at this irradiance, voltage is 0 (can't sustain that current)
+        if (fixedCurrent >= adj.isc) {
+          irradiancePoints.push(g);
+          voltagePoints.push(0);
+          powerPoints.push(0);
+          continue;
+        }
+
+        // Find voltage where current equals fixedCurrent by interpolation
+        let voltage = 0;
+        for (let i = 0; i < curve.currents.length - 1; i++) {
+          if (curve.currents[i] >= fixedCurrent && curve.currents[i + 1] <= fixedCurrent) {
+            const t = (fixedCurrent - curve.currents[i]) / (curve.currents[i + 1] - curve.currents[i] || 1);
+            voltage = curve.voltages[i] + t * (curve.voltages[i + 1] - curve.voltages[i]);
+            break;
+          }
+        }
+
+        const power = voltage * fixedCurrent;
+        irradiancePoints.push(g);
+        voltagePoints.push(parseFloat(voltage.toFixed(3)));
+        powerPoints.push(parseFloat(power.toFixed(1)));
+      }
+
+      return { irradiancePoints, voltagePoints, powerPoints };
+    }
+
+    function updateIrrVChart() {
+      const fixedCurrent = parseFloat(document.getElementById('fixed-current').value);
+      const variant = parseInt(document.getElementById('variant').value);
+      const cellTemp = parseFloat(document.getElementById('temperature').value);
+
+      document.getElementById('fixed-current-val').textContent = fixedCurrent.toFixed(2);
+
+      const data = generateIrrVData(fixedCurrent, variant, cellTemp);
+
+      irrVChart.data.datasets[0].data = data.irradiancePoints.map((g, i) => ({ x: g, y: data.voltagePoints[i] }));
+      irrVChart.data.datasets[1].data = data.irradiancePoints.map((g, i) => ({ x: g, y: data.powerPoints[i] }));
+      irrVChart.update();
+    }
+
+    // =====================================================================
+    // UPDATE CHARTS & SPECS
+    // =====================================================================
+    let lastCurve = null; // cache for lookup
+
+    function update() {
+      const variant = parseInt(document.getElementById('variant').value);
+      const irradiance = parseFloat(document.getElementById('irradiance').value);
+      const cellTemp = parseFloat(document.getElementById('temperature').value);
+
+      document.getElementById('irradiance-val').textContent = irradiance;
+      document.getElementById('temperature-val').textContent = cellTemp;
+
+      const stc = MODULE_DATA[variant];
+      const adj = adjustParams(stc, irradiance, cellTemp);
+      const curve = generateIVCurve(adj);
+      lastCurve = { params: adj, curve };
+
+      // Update specs table
+      document.getElementById('spec-pmax-stc').textContent = stc.pmax.toFixed(0);
+      document.getElementById('spec-voc-stc').textContent = stc.voc.toFixed(2);
+      document.getElementById('spec-isc-stc').textContent = stc.isc.toFixed(2);
+      document.getElementById('spec-vmpp-stc').textContent = stc.vmpp.toFixed(2);
+      document.getElementById('spec-impp-stc').textContent = stc.impp.toFixed(2);
+      document.getElementById('spec-eff-stc').textContent = stc.eff.toFixed(1);
+
+      document.getElementById('spec-pmax-adj').textContent = adj.pmax.toFixed(1);
+      document.getElementById('spec-voc-adj').textContent = adj.voc.toFixed(2);
+      document.getElementById('spec-isc-adj').textContent = adj.isc.toFixed(2);
+      document.getElementById('spec-vmpp-adj').textContent = adj.vmpp.toFixed(2);
+      document.getElementById('spec-impp-adj').textContent = adj.impp.toFixed(2);
+      document.getElementById('spec-eff-adj').textContent = adj.eff.toFixed(1);
+
+      // Color adjusted column
+      const isStc = (irradiance === 1000 && cellTemp === 25);
+      document.querySelectorAll('[id$="-adj"]').forEach(el => {
+        el.style.color = isStc ? '#e2e8f0' : '#f97316';
+      });
+
+      // Build chart data
+      const ivData = curve.voltages.map((v, i) => ({ x: v, y: curve.currents[i] }));
+      const pvData = curve.voltages.map((v, i) => ({ x: v, y: curve.powers[i] }));
+
+      // V-I chart
+      viChart.data.datasets[0].data = ivData;
+      viChart.data.datasets[1].data = [{ x: adj.vmpp, y: adj.impp }]; // MPP
+      viChart.data.datasets[2].data = [{ x: adj.voc, y: 0 }]; // Voc
+      viChart.data.datasets[3].data = [{ x: 0, y: adj.isc }]; // Isc
+      viChart.data.datasets[4].data = []; // clear user point
+      viChart.update();
+
+      // P-V chart
+      pvChart.data.datasets[0].data = pvData;
+      pvChart.data.datasets[1].data = [{ x: adj.vmpp, y: adj.pmax }]; // Pmax
+      pvChart.data.datasets[2].data = []; // clear user point
+      pvChart.update();
+
+      // Clear lookup result
+      document.getElementById('lookup-result').classList.remove('show');
+
+      // Update irradiance vs voltage chart
+      updateIrrVChart();
+    }
+
+    // =====================================================================
+    // POINT LOOKUP
+    // =====================================================================
+    function doLookup() {
+      if (!lastCurve) return;
+      const type = document.getElementById('lookup-type').value;
+      const val = parseFloat(document.getElementById('lookup-value').value);
+      if (isNaN(val)) return;
+
+      const { curve, params } = lastCurve;
+      const resultEl = document.getElementById('lookup-result');
+      let html = '';
+
+      if (type === 'voltage') {
+        // Given V, find I and P
+        if (val < 0 || val > params.voc * 1.02) {
+          html = `<span style="color:var(--red)">Voltage must be between 0 and ${params.voc.toFixed(2)}V (Voc)</span>`;
+        } else {
+          // Interpolate
+          let idx = 0;
+          for (let i = 0; i < curve.voltages.length - 1; i++) {
+            if (curve.voltages[i] <= val && curve.voltages[i + 1] >= val) { idx = i; break; }
+          }
+          const t = (val - curve.voltages[idx]) / (curve.voltages[idx + 1] - curve.voltages[idx] || 1);
+          const current = curve.currents[idx] + t * (curve.currents[idx + 1] - curve.currents[idx]);
+          const power = val * current;
+
+          html = `At <span class="highlight">V = ${val.toFixed(2)} V</span>:<br>
+            Current = <span class="highlight-orange">${current.toFixed(3)} A</span><br>
+            Power = <span class="highlight-purple">${power.toFixed(1)} W</span><br>
+            <span style="color:var(--text-muted);font-size:0.8rem">
+              (MPP: V=${params.vmpp.toFixed(2)}V, I=${params.impp.toFixed(2)}A, P=${params.pmax.toFixed(1)}W)
+            </span>`;
+
+          // Mark on charts
+          viChart.data.datasets[4].data = [{ x: val, y: current }];
+          viChart.update();
+          pvChart.data.datasets[2].data = [{ x: val, y: power }];
+          pvChart.update();
+        }
+      } else if (type === 'current') {
+        // Given I, find V and P
+        if (val < 0 || val > params.isc) {
+          html = `<span style="color:var(--red)">Current must be between 0 and ${params.isc.toFixed(2)}A (Isc)</span>`;
+        } else {
+          let voltage = 0;
+          for (let i = 0; i < curve.currents.length - 1; i++) {
+            if ((curve.currents[i] >= val && curve.currents[i + 1] <= val)) {
+              const t = (val - curve.currents[i]) / (curve.currents[i + 1] - curve.currents[i] || 1);
+              voltage = curve.voltages[i] + t * (curve.voltages[i + 1] - curve.voltages[i]);
+              break;
+            }
+          }
+          const power = voltage * val;
+
+          html = `At <span class="highlight-orange">I = ${val.toFixed(3)} A</span>:<br>
+            Voltage = <span class="highlight">${voltage.toFixed(2)} V</span><br>
+            Power = <span class="highlight-purple">${power.toFixed(1)} W</span><br>
+            <span style="color:var(--text-muted);font-size:0.8rem">
+              (MPP: V=${params.vmpp.toFixed(2)}V, I=${params.impp.toFixed(2)}A, P=${params.pmax.toFixed(1)}W)
+            </span>`;
+
+          viChart.data.datasets[4].data = [{ x: voltage, y: val }];
+          viChart.update();
+          pvChart.data.datasets[2].data = [{ x: voltage, y: power }];
+          pvChart.update();
+        }
+      } else if (type === 'power') {
+        // Given P, find V and I (on the left side of MPP for higher current, right side for lower)
+        if (val < 0 || val > params.pmax * 1.01) {
+          html = `<span style="color:var(--red)">Power must be between 0 and ${params.pmax.toFixed(1)}W (Pmax)</span>`;
+        } else {
+          // Find both operating points (left and right of MPP)
+          const points = [];
+          for (let i = 0; i < curve.powers.length - 1; i++) {
+            if ((curve.powers[i] <= val && curve.powers[i + 1] >= val) ||
+                (curve.powers[i] >= val && curve.powers[i + 1] <= val)) {
+              const t = (val - curve.powers[i]) / (curve.powers[i + 1] - curve.powers[i] || 1);
+              const v = curve.voltages[i] + t * (curve.voltages[i + 1] - curve.voltages[i]);
+              const c = curve.currents[i] + t * (curve.currents[i + 1] - curve.currents[i]);
+              points.push({ v, c });
+            }
+          }
+
+          if (points.length === 0) {
+            html = `<span style="color:var(--red)">No operating point found for P = ${val.toFixed(1)}W</span>`;
+          } else {
+            html = `At <span class="highlight-purple">P = ${val.toFixed(1)} W</span>, operating points:<br>`;
+            points.forEach((pt, idx) => {
+              html += `&nbsp;&nbsp;Point ${idx + 1}: <span class="highlight">V = ${pt.v.toFixed(2)} V</span>, 
+                <span class="highlight-orange">I = ${pt.c.toFixed(3)} A</span><br>`;
+            });
+            html += `<span style="color:var(--text-muted);font-size:0.8rem">
+              (MPP: V=${params.vmpp.toFixed(2)}V, I=${params.impp.toFixed(2)}A, P=${params.pmax.toFixed(1)}W)
+            </span>`;
+
+            // Mark first point
+            viChart.data.datasets[4].data = points.map(p => ({ x: p.v, y: p.c }));
+            viChart.update();
+            pvChart.data.datasets[2].data = points.map(p => ({ x: p.v, y: val }));
+            pvChart.update();
+          }
+        }
+      }
+
+      resultEl.innerHTML = html;
+      resultEl.classList.add('show');
+    }
+
+    // =====================================================================
+    // EVENT LISTENERS & INIT
+    // =====================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      createCharts();
+      update();
+
+      document.getElementById('variant').addEventListener('change', update);
+      document.getElementById('irradiance').addEventListener('input', update);
+      document.getElementById('temperature').addEventListener('input', update);
+      document.getElementById('fixed-current').addEventListener('input', updateIrrVChart);
+
+      // Enter key on lookup value
+      document.getElementById('lookup-value').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doLookup();
+      });
+    });
+  </script>
+</body>
+</html>
