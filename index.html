@@ -345,14 +345,19 @@
       const voc_adj = stc.voc * (1 + tc.voc * dT) + (nDiodes * 0.02585) * Math.log(Math.max(G_ratio, 0.01));
       const pmax_adj = stc.pmax * G_ratio * (1 + tc.pmax * dT);
 
-      // Scale Vmpp and Impp proportionally
-      const vmpp_adj = stc.vmpp * (voc_adj / stc.voc);
-      const impp_adj = pmax_adj / vmpp_adj;
+      // Scale Vmpp and Impp proportionally, preserving the STC fill-factor ratio
+      // so that Impp/Isc stays the same as at STC (curve shape is preserved)
+      const ff_i = stc.impp / stc.isc;  // current fill-factor ratio from STC
+      const ff_v = stc.vmpp / stc.voc;  // voltage fill-factor ratio from STC
+      const vmpp_adj = voc_adj * ff_v;
+      let impp_adj = isc_adj * ff_i;
+      // Recalculate pmax from vmpp and impp for consistency
+      const pmax_calc = vmpp_adj * impp_adj;
 
-      const eff_adj = (pmax_adj / (irradiance * stc.area)) * 100;
+      const eff_adj = (pmax_calc / (irradiance * stc.area)) * 100;
 
       return {
-        pmax: Math.max(pmax_adj, 0),
+        pmax: Math.max(pmax_calc, 0),
         voc: Math.max(voc_adj, 0),
         isc: Math.max(isc_adj, 0),
         vmpp: Math.max(vmpp_adj, 0),
@@ -367,6 +372,14 @@
     function generateIVCurve(params, numPoints = 500) {
       const { voc, isc, vmpp, impp } = params;
 
+      // Guard: if parameters are degenerate, return empty curve
+      if (voc <= 0 || isc <= 0) {
+        return { voltages: [0], currents: [0], powers: [0] };
+      }
+
+      // Clamp impp to be strictly less than isc for valid curve shape
+      const impp_safe = Math.min(impp, isc * 0.98);
+
       // Derive curve shape constants from MPP
       // At MPP: Impp = Isc * (1 - C1 * (e^(Vmpp/(C2*Voc)) - 1))
       // At Voc: 0 = Isc * (1 - C1 * (e^(1/C2) - 1))  =>  C1 = 1 / (e^(1/C2) - 1)
@@ -375,7 +388,7 @@
       for (let iter = 0; iter < 100; iter++) {
         const C1 = 1 / (Math.exp(1 / C2) - 1);
         const i_calc = isc * (1 - C1 * (Math.exp(vmpp / (C2 * voc)) - 1));
-        const err = i_calc - impp;
+        const err = i_calc - impp_safe;
         // Newton-like step
         const dC2 = 0.0001;
         const C1p = 1 / (Math.exp(1 / (C2 + dC2)) - 1);
@@ -384,6 +397,7 @@
         if (Math.abs(deriv) < 1e-12) break;
         C2 -= err / deriv;
         C2 = Math.max(C2, 0.001);
+        C2 = Math.min(C2, 1.0);
         if (Math.abs(err) < 1e-6) break;
       }
 
