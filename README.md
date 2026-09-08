@@ -1,14 +1,25 @@
-# Trina Vertex S+ NEG18R.28 — V-I / P-V Curve Simulator
+# Solar Module — V-I / P-V Curve Simulator
 
-An interactive, browser-based tool to simulate **Voltage-Current (V-I)** and **Power-Voltage (P-V)** curves for the **Trina Vertex S+ NEG18R.28** series solar modules, built on the single-diode model with datasheet-accurate parameters.
+An interactive, browser-based tool to simulate **Voltage-Current (V-I)** and **Power-Voltage (P-V)** curves for solar modules from multiple manufacturers, built on the single-diode model with datasheet-accurate parameters.
 
 🔗 **Live Tool:** [https://akhlad123.github.io/vi-curve-simulator/](https://akhlad123.github.io/vi-curve-simulator/)
 
 ---
 
+## Supported Modules
+
+| Manufacturer | Model | Power |
+|---|---|---|
+| **Trina Solar** | Vertex S+ TSM-NEG18R.28 | 485W – 510W |
+| **JinkoSolar** | Tiger Neo JKM625N-66HL4M-BDV | 625W |
+| **LONGi Solar** | Hi-MO 5m LR5-54HPH-425M | 425W |
+| **Adani Solar** | Elan Shine TOPCon ASB-M10-144-575 | 575W |
+
+---
+
 ## Features
 
-- **Module Variant Selection** — Choose from 485W to 510W variants (TSM-NEG18R.28)
+- **Multi-manufacturer support** — Choose from Trina, Jinko, LONGi, and Adani modules
 - **Real-time curve generation** — V-I and P-V curves update instantly as parameters change
 - **Environmental conditions** — Adjust irradiance (G) and cell temperature (T)
 - **String configuration** — Set number of modules in series and parallel

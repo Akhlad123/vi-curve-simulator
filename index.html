@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Trina Vertex S+ NEG18R.28 — V-I / P-V Curve Simulator</title>
+  <title>Solar Module — V-I / P-V Curve Simulator</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <style>
     :root {
@@ -123,8 +123,8 @@
 </head>
 <body>
   <header>
-    <h1>Trina Vertex S+ NEG18R.28 — V-I / P-V Curve Simulator</h1>
-    <p>Interactive voltage-current and power-voltage curves based on single-diode model &bull; Datasheet-accurate parameters</p>
+    <h1>Solar Module — V-I / P-V Curve Simulator</h1>
+    <p>Interactive voltage-current and power-voltage curves based on single-diode model &bull; Datasheet-accurate parameters &bull; Multi-manufacturer</p>
   </header>
 
   <div class="container">
@@ -137,12 +137,23 @@
           <div class="field">
             <label>Module Variant</label>
             <select id="variant">
-              <option value="485">TSM-NEG18R.28 485W</option>
-              <option value="490">TSM-NEG18R.28 490W</option>
-              <option value="495">TSM-NEG18R.28 495W</option>
-              <option value="500" selected>TSM-NEG18R.28 500W</option>
-              <option value="505">TSM-NEG18R.28 505W</option>
-              <option value="510">TSM-NEG18R.28 510W</option>
+              <optgroup label="Trina Solar — Vertex S+ NEG18R.28">
+                <option value="trina_485">TSM-NEG18R.28 485W</option>
+                <option value="trina_490">TSM-NEG18R.28 490W</option>
+                <option value="trina_495">TSM-NEG18R.28 495W</option>
+                <option value="trina_500" selected>TSM-NEG18R.28 500W</option>
+                <option value="trina_505">TSM-NEG18R.28 505W</option>
+                <option value="trina_510">TSM-NEG18R.28 510W</option>
+              </optgroup>
+              <optgroup label="JinkoSolar — Tiger Neo 66HL4M-BDV">
+                <option value="jinko_625">JKM625N-66HL4M-BDV 625W</option>
+              </optgroup>
+              <optgroup label="LONGi Solar — Hi-MO 5m LR5-54HPH">
+                <option value="longi_425">LR5-54HPH-425M 425W</option>
+              </optgroup>
+              <optgroup label="Adani Solar — Elan Shine TOPCon">
+                <option value="adani_575">ASB-M10-144-575 575W</option>
+              </optgroup>
             </select>
           </div>
 
@@ -207,11 +218,11 @@
         <div class="panel" style="margin-top: 16px;">
           <h2>Temperature Coefficients</h2>
           <table class="specs-table">
-            <tr><th>P<sub>max</sub></th><td>-0.29 %/&deg;C</td></tr>
-            <tr><th>V<sub>oc</sub></th><td>-0.24 %/&deg;C</td></tr>
-            <tr><th>I<sub>sc</sub></th><td>+0.04 %/&deg;C</td></tr>
-            <tr><th>NOCT</th><td>43 &deg;C (&plusmn;2&deg;C)</td></tr>
-            <tr><th>Cells</th><td>108 (n-type i-TOPCon)</td></tr>
+            <tr><th>P<sub>max</sub></th><td id="tc-pmax">—</td></tr>
+            <tr><th>V<sub>oc</sub></th><td id="tc-voc">—</td></tr>
+            <tr><th>I<sub>sc</sub></th><td id="tc-isc">—</td></tr>
+            <tr><th>NOCT</th><td id="tc-noct">—</td></tr>
+            <tr><th>Cells</th><td id="tc-cells">—</td></tr>
           </table>
         </div>
       </div>
@@ -283,29 +294,37 @@
   </div>
 
   <footer>
-    Trina Solar Vertex S+ NEG18R.28 Datasheet Simulator &bull; Single-diode model approximation &bull;
-    Data source: Trina Solar official datasheet (2024)
+    Solar Module V-I / P-V Curve Simulator &bull; Single-diode model approximation &bull;
+    Data source: Official manufacturer datasheets
   </footer>
 
   <script>
     // =====================================================================
-    // DATASHEET PARAMETERS — Trina Vertex S+ NEG18R.28 (STC)
+    // DATASHEET PARAMETERS — All Modules (STC)
+    // Each entry includes: electrical specs, cell count, module area (m²),
+    // temperature coefficients (%/°C as fractions), NOCT, and cell type.
     // =====================================================================
     const MODULE_DATA = {
-      485: { pmax: 485, voc: 39.4, isc: 15.76, vmpp: 32.7, impp: 14.84, eff: 21.8 },
-      490: { pmax: 490, voc: 39.6, isc: 15.80, vmpp: 32.9, impp: 14.91, eff: 22.0 },
-      495: { pmax: 495, voc: 39.8, isc: 15.83, vmpp: 33.1, impp: 14.97, eff: 22.3 },
-      500: { pmax: 500, voc: 40.1, isc: 15.86, vmpp: 33.3, impp: 15.03, eff: 22.5 },
-      505: { pmax: 505, voc: 40.3, isc: 15.89, vmpp: 33.5, impp: 15.09, eff: 22.7 },
-      510: { pmax: 510, voc: 40.6, isc: 15.93, vmpp: 33.7, impp: 15.14, eff: 22.9 },
+      // --- Trina Solar — Vertex S+ NEG18R.28 ---
+      trina_485: { pmax: 485, voc: 39.4, isc: 15.76, vmpp: 32.7, impp: 14.84, eff: 21.8, nCells: 108, area: 2.222, noct: 43, cellType: 'n-type i-TOPCon', tempCoeff: { pmax: -0.0029, voc: -0.0024, isc: 0.0004 } },
+      trina_490: { pmax: 490, voc: 39.6, isc: 15.80, vmpp: 32.9, impp: 14.91, eff: 22.0, nCells: 108, area: 2.222, noct: 43, cellType: 'n-type i-TOPCon', tempCoeff: { pmax: -0.0029, voc: -0.0024, isc: 0.0004 } },
+      trina_495: { pmax: 495, voc: 39.8, isc: 15.83, vmpp: 33.1, impp: 14.97, eff: 22.3, nCells: 108, area: 2.222, noct: 43, cellType: 'n-type i-TOPCon', tempCoeff: { pmax: -0.0029, voc: -0.0024, isc: 0.0004 } },
+      trina_500: { pmax: 500, voc: 40.1, isc: 15.86, vmpp: 33.3, impp: 15.03, eff: 22.5, nCells: 108, area: 2.222, noct: 43, cellType: 'n-type i-TOPCon', tempCoeff: { pmax: -0.0029, voc: -0.0024, isc: 0.0004 } },
+      trina_505: { pmax: 505, voc: 40.3, isc: 15.89, vmpp: 33.5, impp: 15.09, eff: 22.7, nCells: 108, area: 2.222, noct: 43, cellType: 'n-type i-TOPCon', tempCoeff: { pmax: -0.0029, voc: -0.0024, isc: 0.0004 } },
+      trina_510: { pmax: 510, voc: 40.6, isc: 15.93, vmpp: 33.7, impp: 15.14, eff: 22.9, nCells: 108, area: 2.222, noct: 43, cellType: 'n-type i-TOPCon', tempCoeff: { pmax: -0.0029, voc: -0.0024, isc: 0.0004 } },
+
+      // --- JinkoSolar — Tiger Neo JKM625N-66HL4M-BDV ---
+      jinko_625: { pmax: 625, voc: 49.28, isc: 16.14, vmpp: 40.88, impp: 15.29, eff: 23.1, nCells: 132, area: 2.707, noct: 45, cellType: 'n-type TOPCon', tempCoeff: { pmax: -0.0029, voc: -0.0025, isc: 0.00045 } },
+
+      // --- LONGi Solar — Hi-MO 5m LR5-54HPH-425M ---
+      longi_425: { pmax: 425, voc: 37.96, isc: 14.08, vmpp: 31.94, impp: 13.31, eff: 21.8, nCells: 108, area: 1.953, noct: 45, cellType: 'p-type PERC Mono', tempCoeff: { pmax: -0.0034, voc: -0.00265, isc: 0.0005 } },
+
+      // --- Adani Solar — Elan Shine TOPCon ASB-M10-144-575 ---
+      adani_575: { pmax: 575, voc: 52.3, isc: 13.89, vmpp: 43.78, impp: 13.14, eff: 22.3, nCells: 144, area: 2.581, noct: 45, cellType: 'n-type TOPCon', tempCoeff: { pmax: -0.0032, voc: -0.0024, isc: 0.00028 } },
     };
 
-    // Temperature coefficients
-    const TEMP_COEFF = { pmax: -0.0029, voc: -0.0024, isc: 0.0004 };
     const STC_TEMP = 25;    // °C
     const STC_IRR = 1000;   // W/m²
-    const N_CELLS = 108;
-    const MODULE_AREA = 2.222; // m² (approximate for this module)
 
     // =====================================================================
     // SINGLE-DIODE MODEL — V-I Curve Generation
@@ -315,16 +334,17 @@
     function adjustParams(stc, irradiance, cellTemp) {
       const dT = cellTemp - STC_TEMP;
       const G_ratio = irradiance / STC_IRR;
+      const tc = stc.tempCoeff;
 
-      const isc_adj = stc.isc * G_ratio * (1 + TEMP_COEFF.isc * dT);
-      const voc_adj = stc.voc * (1 + TEMP_COEFF.voc * dT) + (N_CELLS * 0.02585) * Math.log(Math.max(G_ratio, 0.01));
-      const pmax_adj = stc.pmax * G_ratio * (1 + TEMP_COEFF.pmax * dT);
+      const isc_adj = stc.isc * G_ratio * (1 + tc.isc * dT);
+      const voc_adj = stc.voc * (1 + tc.voc * dT) + (stc.nCells * 0.02585) * Math.log(Math.max(G_ratio, 0.01));
+      const pmax_adj = stc.pmax * G_ratio * (1 + tc.pmax * dT);
 
       // Scale Vmpp and Impp proportionally
       const vmpp_adj = stc.vmpp * (voc_adj / stc.voc);
       const impp_adj = pmax_adj / vmpp_adj;
 
-      const eff_adj = (pmax_adj / (irradiance * MODULE_AREA)) * 100;
+      const eff_adj = (pmax_adj / (irradiance * stc.area)) * 100;
 
       return {
         pmax: Math.max(pmax_adj, 0),
@@ -678,7 +698,7 @@
 
     function updateIrrVChart() {
       const fixedCurrent = parseFloat(document.getElementById('fixed-current').value);
-      const variant = parseInt(document.getElementById('variant').value);
+      const variant = document.getElementById('variant').value;
       const cellTemp = parseFloat(document.getElementById('temperature').value);
 
       document.getElementById('fixed-current-val').textContent = fixedCurrent.toFixed(2);
@@ -696,7 +716,7 @@
     let lastCurve = null; // cache for lookup
 
     function update() {
-      const variant = parseInt(document.getElementById('variant').value);
+      const variant = document.getElementById('variant').value;
       const irradiance = parseFloat(document.getElementById('irradiance').value);
       const cellTemp = parseFloat(document.getElementById('temperature').value);
 
@@ -704,6 +724,14 @@
       document.getElementById('temperature-val').textContent = cellTemp;
 
       const stc = MODULE_DATA[variant];
+
+      // Update temperature coefficients panel
+      const tc = stc.tempCoeff;
+      document.getElementById('tc-pmax').textContent = (tc.pmax * 100).toFixed(2) + ' %/\u00B0C';
+      document.getElementById('tc-voc').textContent = (tc.voc * 100).toFixed(3) + ' %/\u00B0C';
+      document.getElementById('tc-isc').textContent = (tc.isc > 0 ? '+' : '') + (tc.isc * 100).toFixed(3) + ' %/\u00B0C';
+      document.getElementById('tc-noct').textContent = stc.noct + ' \u00B0C (\u00B12\u00B0C)';
+      document.getElementById('tc-cells').textContent = stc.nCells + ' (' + stc.cellType + ')';
       const adj = adjustParams(stc, irradiance, cellTemp);
       const curve = generateIVCurve(adj);
       lastCurve = { params: adj, curve };
