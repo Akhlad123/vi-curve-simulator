@@ -289,6 +289,30 @@
           </div>
           <div class="lookup-result" id="lookup-result"></div>
         </div>
+
+        <!-- Reverse Lookup: Given Imp, Vmp, Temp → find Irradiance & Power -->
+        <div class="lookup-section">
+          <h2 style="color: var(--green);">Reverse Lookup — Find Irradiance from Imp, Vmp & Temperature</h2>
+          <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">
+            Provide measured Imp, Vmp and cell temperature to determine what irradiance level and power output correspond to those operating conditions.
+          </p>
+          <div class="lookup-row">
+            <div class="field">
+              <label>Imp (A)</label>
+              <input type="number" id="rev-imp" step="0.01" placeholder="e.g. 13.14" />
+            </div>
+            <div class="field">
+              <label>Vmp (V)</label>
+              <input type="number" id="rev-vmp" step="0.01" placeholder="e.g. 43.78" />
+            </div>
+            <div class="field">
+              <label>Cell Temp (&deg;C)</label>
+              <input type="number" id="rev-temp" step="1" value="25" />
+            </div>
+            <button class="btn" style="background:var(--green);" onclick="doReverseLookup()">Find Irradiance</button>
+          </div>
+          <div class="lookup-result" id="rev-lookup-result"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -911,6 +935,98 @@
     }
 
     // =====================================================================
+    // REVERSE LOOKUP — Given Imp, Vmp, Temp → find Irradiance & Power
+    // =====================================================================
+    function doReverseLookup() {
+      const impUser = parseFloat(document.getElementById('rev-imp').value);
+      const vmpUser = parseFloat(document.getElementById('rev-vmp').value);
+      const tempUser = parseFloat(document.getElementById('rev-temp').value);
+      const resultEl = document.getElementById('rev-lookup-result');
+
+      if (isNaN(impUser) || isNaN(vmpUser) || isNaN(tempUser)) {
+        resultEl.innerHTML = '<span style="color:var(--red)">Please enter valid Imp, Vmp, and Temperature values.</span>';
+        resultEl.classList.add('show');
+        return;
+      }
+
+      const variant = document.getElementById('variant').value;
+      const stc = MODULE_DATA[variant];
+      const tc = stc.tempCoeff;
+      const dT = tempUser - STC_TEMP;
+      const ff_i = stc.impp / stc.isc;
+      const ff_v = stc.vmpp / stc.voc;
+      const nDiodes = Math.ceil(stc.nCells / 2);
+
+      // Sweep irradiance finely from 50 to 1400 W/m² and score each
+      let bestG = null;
+      let bestErr = Infinity;
+      let bestAdj = null;
+
+      for (let g = 10; g <= 1400; g += 1) {
+        const adj = adjustParams(stc, g, tempUser);
+        // Normalized error: how close are the adjusted Vmpp & Impp to user values
+        const errImp = Math.abs(adj.impp - impUser) / stc.impp;
+        const errVmp = Math.abs(adj.vmpp - vmpUser) / stc.vmpp;
+        const totalErr = errImp + errVmp;
+
+        if (totalErr < bestErr) {
+          bestErr = totalErr;
+          bestG = g;
+          bestAdj = adj;
+        }
+      }
+
+      // Refine with 0.1 W/m² steps around best
+      const gLo = Math.max(10, bestG - 2);
+      const gHi = Math.min(1400, bestG + 2);
+      for (let g = gLo; g <= gHi; g += 0.1) {
+        const adj = adjustParams(stc, g, tempUser);
+        const errImp = Math.abs(adj.impp - impUser) / stc.impp;
+        const errVmp = Math.abs(adj.vmpp - vmpUser) / stc.vmpp;
+        const totalErr = errImp + errVmp;
+
+        if (totalErr < bestErr) {
+          bestErr = totalErr;
+          bestG = g;
+          bestAdj = adj;
+        }
+      }
+
+      const power = impUser * vmpUser;
+      const impErr = ((bestAdj.impp - impUser) / impUser * 100);
+      const vmpErr = ((bestAdj.vmpp - vmpUser) / vmpUser * 100);
+
+      let html = '';
+
+      if (bestErr > 0.5) {
+        html += `<span style="color:var(--red);font-weight:600;">Warning: No close match found. The provided Imp & Vmp may not be achievable with this module at the given temperature.</span><br><br>`;
+      }
+
+      html += `<b style="color:var(--green)">Estimated Irradiance: <span style="font-size:1.1rem">${bestG.toFixed(1)} W/m&sup2;</span></b><br>`;
+      html += `<br>`;
+      html += `<b>Input Conditions:</b><br>`;
+      html += `&nbsp;&nbsp;Imp = <span class="highlight-orange">${impUser.toFixed(3)} A</span>, `;
+      html += `Vmp = <span class="highlight">${vmpUser.toFixed(2)} V</span>, `;
+      html += `Cell Temp = ${tempUser.toFixed(1)} &deg;C<br>`;
+      html += `<br>`;
+      html += `<b>Computed at ${bestG.toFixed(1)} W/m&sup2;:</b><br>`;
+      html += `&nbsp;&nbsp;Power = <span class="highlight-purple">${power.toFixed(1)} W</span> (Imp &times; Vmp)<br>`;
+      html += `&nbsp;&nbsp;Model Imp = ${bestAdj.impp.toFixed(3)} A <span style="color:var(--text-muted)">(${impErr >= 0 ? '+' : ''}${impErr.toFixed(2)}%)</span><br>`;
+      html += `&nbsp;&nbsp;Model Vmp = ${bestAdj.vmpp.toFixed(2)} V <span style="color:var(--text-muted)">(${vmpErr >= 0 ? '+' : ''}${vmpErr.toFixed(2)}%)</span><br>`;
+      html += `&nbsp;&nbsp;Model Pmax = ${bestAdj.pmax.toFixed(1)} W<br>`;
+      html += `&nbsp;&nbsp;Voc = ${bestAdj.voc.toFixed(2)} V, Isc = ${bestAdj.isc.toFixed(2)} A<br>`;
+      html += `&nbsp;&nbsp;Efficiency = ${bestAdj.eff.toFixed(1)} %<br>`;
+
+      resultEl.innerHTML = html;
+      resultEl.classList.add('show');
+
+      // Also update main charts to show this irradiance
+      document.getElementById('irradiance').value = Math.round(bestG / 50) * 50 || 100;
+      document.getElementById('temperature').value = Math.round(tempUser);
+      update();
+    }
+
+    // =====================================================================
     // EVENT LISTENERS & INIT
     // =====================================================================
     document.addEventListener('DOMContentLoaded', () => {
@@ -925,6 +1041,13 @@
       // Enter key on lookup value
       document.getElementById('lookup-value').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') doLookup();
+      });
+
+      // Enter key on reverse lookup inputs
+      ['rev-imp', 'rev-vmp', 'rev-temp'].forEach(id => {
+        document.getElementById(id).addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') doReverseLookup();
+        });
       });
     });
   </script>
