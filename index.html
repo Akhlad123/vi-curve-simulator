@@ -337,7 +337,12 @@
       const tc = stc.tempCoeff;
 
       const isc_adj = stc.isc * G_ratio * (1 + tc.isc * dT);
-      const voc_adj = stc.voc * (1 + tc.voc * dT) + (stc.nCells * 0.02585) * Math.log(Math.max(G_ratio, 0.01));
+      // Voc logarithmic irradiance correction using module-level thermal voltage
+      // Empirical: ΔVoc ≈ (nDiodes * n * kT/q) * ln(G/Gref), where nDiodes = nCells / 2
+      // for half-cut cell modules (2 parallel sub-strings). This matches typical
+      // datasheet behavior of ~3-5% Voc drop from 1000 to 200 W/m².
+      const nDiodes = Math.ceil(stc.nCells / 2);
+      const voc_adj = stc.voc * (1 + tc.voc * dT) + (nDiodes * 0.02585) * Math.log(Math.max(G_ratio, 0.01));
       const pmax_adj = stc.pmax * G_ratio * (1 + tc.pmax * dT);
 
       // Scale Vmpp and Impp proportionally
