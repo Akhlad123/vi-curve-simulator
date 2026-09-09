@@ -936,7 +936,24 @@
 
     // =====================================================================
     // REVERSE LOOKUP — Given Imp, Vmp, Temp → find Irradiance & Power
+    // Finds the irradiance at which the IV curve passes through (Vmp, Imp).
     // =====================================================================
+
+    // Helper: given adjusted params, generate IV curve and interpolate
+    // to find the current at a specific voltage. Returns null if voltage
+    // is beyond Voc.
+    function currentAtVoltage(adj, targetV) {
+      if (targetV < 0 || targetV > adj.voc * 1.02) return null;
+      const curve = generateIVCurve(adj, 500);
+      for (let i = 0; i < curve.voltages.length - 1; i++) {
+        if (curve.voltages[i] <= targetV && curve.voltages[i + 1] >= targetV) {
+          const t = (targetV - curve.voltages[i]) / (curve.voltages[i + 1] - curve.voltages[i] || 1);
+          return curve.currents[i] + t * (curve.currents[i + 1] - curve.currents[i]);
+        }
+      }
+      return null;
+    }
+
     function doReverseLookup() {
       const impUser = parseFloat(document.getElementById('rev-imp').value);
       const vmpUser = parseFloat(document.getElementById('rev-vmp').value);
@@ -951,79 +968,93 @@
 
       const variant = document.getElementById('variant').value;
       const stc = MODULE_DATA[variant];
-      const tc = stc.tempCoeff;
-      const dT = tempUser - STC_TEMP;
-      const ff_i = stc.impp / stc.isc;
-      const ff_v = stc.vmpp / stc.voc;
-      const nDiodes = Math.ceil(stc.nCells / 2);
 
-      // Sweep irradiance finely from 50 to 1400 W/m² and score each
+      // Coarse sweep: find irradiance where IV curve current at Vmp_user ≈ Imp_user
       let bestG = null;
       let bestErr = Infinity;
-      let bestAdj = null;
+      let bestCurrent = null;
 
-      for (let g = 10; g <= 1400; g += 1) {
+      for (let g = 10; g <= 1500; g += 2) {
         const adj = adjustParams(stc, g, tempUser);
-        // Normalized error: how close are the adjusted Vmpp & Impp to user values
-        const errImp = Math.abs(adj.impp - impUser) / stc.impp;
-        const errVmp = Math.abs(adj.vmpp - vmpUser) / stc.vmpp;
-        const totalErr = errImp + errVmp;
-
-        if (totalErr < bestErr) {
-          bestErr = totalErr;
+        const curAtV = currentAtVoltage(adj, vmpUser);
+        if (curAtV === null) continue;
+        const err = Math.abs(curAtV - impUser);
+        if (err < bestErr) {
+          bestErr = err;
           bestG = g;
-          bestAdj = adj;
+          bestCurrent = curAtV;
         }
       }
 
-      // Refine with 0.1 W/m² steps around best
-      const gLo = Math.max(10, bestG - 2);
-      const gHi = Math.min(1400, bestG + 2);
+      if (bestG === null) {
+        resultEl.innerHTML = '<span style="color:var(--red)">No irradiance found where the IV curve passes through the given (Vmp, Imp) point. The voltage may exceed the module\'s Voc at all irradiance levels.</span>';
+        resultEl.classList.add('show');
+        return;
+      }
+
+      // Fine sweep: refine to 0.1 W/m² precision
+      const gLo = Math.max(10, bestG - 5);
+      const gHi = Math.min(1500, bestG + 5);
       for (let g = gLo; g <= gHi; g += 0.1) {
         const adj = adjustParams(stc, g, tempUser);
-        const errImp = Math.abs(adj.impp - impUser) / stc.impp;
-        const errVmp = Math.abs(adj.vmpp - vmpUser) / stc.vmpp;
-        const totalErr = errImp + errVmp;
-
-        if (totalErr < bestErr) {
-          bestErr = totalErr;
+        const curAtV = currentAtVoltage(adj, vmpUser);
+        if (curAtV === null) continue;
+        const err = Math.abs(curAtV - impUser);
+        if (err < bestErr) {
+          bestErr = err;
           bestG = g;
-          bestAdj = adj;
+          bestCurrent = curAtV;
         }
       }
 
+      const bestAdj = adjustParams(stc, bestG, tempUser);
       const power = impUser * vmpUser;
-      const impErr = ((bestAdj.impp - impUser) / impUser * 100);
-      const vmpErr = ((bestAdj.vmpp - vmpUser) / vmpUser * 100);
+      const currentErr = ((bestCurrent - impUser) / impUser * 100);
 
       let html = '';
 
-      if (bestErr > 0.5) {
-        html += `<span style="color:var(--red);font-weight:600;">Warning: No close match found. The provided Imp & Vmp may not be achievable with this module at the given temperature.</span><br><br>`;
+      if (bestErr > 0.1) {
+        html += `<span style="color:var(--red);font-weight:600;">Warning: No exact match found. The closest result has a current deviation of ${bestErr.toFixed(3)} A at the given voltage.</span><br><br>`;
       }
 
       html += `<b style="color:var(--green)">Estimated Irradiance: <span style="font-size:1.1rem">${bestG.toFixed(1)} W/m&sup2;</span></b><br>`;
       html += `<br>`;
-      html += `<b>Input Conditions:</b><br>`;
-      html += `&nbsp;&nbsp;Imp = <span class="highlight-orange">${impUser.toFixed(3)} A</span>, `;
-      html += `Vmp = <span class="highlight">${vmpUser.toFixed(2)} V</span>, `;
+      html += `<b>Input Operating Point:</b><br>`;
+      html += `&nbsp;&nbsp;V = <span class="highlight">${vmpUser.toFixed(2)} V</span>, `;
+      html += `I = <span class="highlight-orange">${impUser.toFixed(3)} A</span>, `;
       html += `Cell Temp = ${tempUser.toFixed(1)} &deg;C<br>`;
+      html += `&nbsp;&nbsp;Power at this point = <span class="highlight-purple">${power.toFixed(1)} W</span><br>`;
       html += `<br>`;
-      html += `<b>Computed at ${bestG.toFixed(1)} W/m&sup2;:</b><br>`;
-      html += `&nbsp;&nbsp;Power = <span class="highlight-purple">${power.toFixed(1)} W</span> (Imp &times; Vmp)<br>`;
-      html += `&nbsp;&nbsp;Model Imp = ${bestAdj.impp.toFixed(3)} A <span style="color:var(--text-muted)">(${impErr >= 0 ? '+' : ''}${impErr.toFixed(2)}%)</span><br>`;
-      html += `&nbsp;&nbsp;Model Vmp = ${bestAdj.vmpp.toFixed(2)} V <span style="color:var(--text-muted)">(${vmpErr >= 0 ? '+' : ''}${vmpErr.toFixed(2)}%)</span><br>`;
-      html += `&nbsp;&nbsp;Model Pmax = ${bestAdj.pmax.toFixed(1)} W<br>`;
-      html += `&nbsp;&nbsp;Voc = ${bestAdj.voc.toFixed(2)} V, Isc = ${bestAdj.isc.toFixed(2)} A<br>`;
+      html += `<b>IV Curve at ${bestG.toFixed(1)} W/m&sup2;, ${tempUser.toFixed(1)} &deg;C:</b><br>`;
+      html += `&nbsp;&nbsp;Current at V=${vmpUser.toFixed(2)}V = <span class="highlight-orange">${bestCurrent.toFixed(3)} A</span>`;
+      html += ` <span style="color:var(--text-muted)">(${currentErr >= 0 ? '+' : ''}${currentErr.toFixed(2)}% vs input)</span><br>`;
+      html += `<br>`;
+      html += `<b>Module Parameters at this Irradiance:</b><br>`;
+      html += `&nbsp;&nbsp;MPP: Vmpp = ${bestAdj.vmpp.toFixed(2)} V, Impp = ${bestAdj.impp.toFixed(3)} A, Pmax = ${bestAdj.pmax.toFixed(1)} W<br>`;
+      html += `&nbsp;&nbsp;Voc = ${bestAdj.voc.toFixed(2)} V, Isc = ${bestAdj.isc.toFixed(3)} A<br>`;
       html += `&nbsp;&nbsp;Efficiency = ${bestAdj.eff.toFixed(1)} %<br>`;
+
+      // Show how far from MPP the user's point is
+      const mppPower = bestAdj.pmax;
+      const mppRatio = (power / mppPower * 100);
+      html += `<br>`;
+      html += `<b>Operating Point vs MPP:</b><br>`;
+      html += `&nbsp;&nbsp;Your power: ${power.toFixed(1)} W / MPP: ${mppPower.toFixed(1)} W = <span style="color:${mppRatio > 95 ? 'var(--green)' : mppRatio > 80 ? 'var(--accent2)' : 'var(--red)'};font-weight:700">${mppRatio.toFixed(1)}%</span> of Pmax<br>`;
 
       resultEl.innerHTML = html;
       resultEl.classList.add('show');
 
-      // Also update main charts to show this irradiance
-      document.getElementById('irradiance').value = Math.round(bestG / 50) * 50 || 100;
+      // Update main charts to show this irradiance & mark the user's point
+      const nearestSliderG = Math.min(1200, Math.max(100, Math.round(bestG / 50) * 50));
+      document.getElementById('irradiance').value = nearestSliderG;
       document.getElementById('temperature').value = Math.round(tempUser);
       update();
+
+      // Mark the user's (V, I) point on the VI chart
+      viChart.data.datasets[4].data = [{ x: vmpUser, y: impUser }];
+      viChart.update();
+      pvChart.data.datasets[2].data = [{ x: vmpUser, y: power }];
+      pvChart.update();
     }
 
     // =====================================================================
